@@ -13,6 +13,12 @@ and more.
 - Hierarchical system of names
 - Decentralized
 
+### DNS Zone
+
+- Each Nameserver defines a "zone" of records
+- e.g. `basis-ai.com` zone
+- The zone may elect to delegate a child Nameserver for part of its zone (e.g. subdomain)
+
 ---
 ![bg 70%](https://upload.wikimedia.org/wikipedia/commons/thumb/b/b1/Domain_name_space.svg/1280px-Domain_name_space.svg.png)
 
@@ -367,10 +373,18 @@ _dmarc.basis-ai.com.    3600    IN      TXT     "v=DMARC1;" "p=quarantine;" "sp=
 - Sending DNS Queries to a DNS Server, usually on port 53
 - When you connect to your network, your gateway's DHCP server usually sets itself as the DNS server
 - Your Gateway will then use the DNS server assigned to it by your ISP DHCP
+- Iteratively by the client
+- Or done recursively where the DNS server sends queries "upstream"
 
-### DNS Caching
+---
+![background](https://upload.wikimedia.org/wikipedia/commons/thumb/a/a5/Example_of_an_iterative_DNS_resolver.svg/1280px-Example_of_an_iterative_DNS_resolver.svg.png)
+
+---
+
+## DNS Caching
 
 - Results are cached with a TTL
+- Reduce load on the root servers
 - Updates to Nameservers will take time to propogate.
 
 ---
@@ -426,8 +440,258 @@ $ dig js.hs-analytics.net
 ![bg 50%](assets/images/pihole.png)
 
 ---
+## Problems
 
-## RRSet
+- DNS Cache Poisoning
+- No way to validate DNS Records
+- Lack of DNS Query Privacy (e.g. Indonesia DNS hijacking!)
+
+---
+## DNSSEC
+
+- Digitally sign DNS records
+- Implemented with *more* DNS record types
+- Not all TLDs support (e.g. `.ai` does not)
+
+### Reading Materials
+- [`dig` + DNSSEC](https://metebalci.com/blog/a-short-practical-tutorial-of-dig-dns-and-dnssec/)
+- [DNSSEC](https://metebalci.com/blog/a-minimum-complete-tutorial-of-dnssec/)
+- [Cloudflare Post](https://www.cloudflare.com/dns/dnssec/how-dnssec-works/)
+
+---
+### Resource Record (RR)
+
+```
+basis-ai.com.           3398    IN      TXT     "google-site-verification=lTJdfZNdjSedLBKIOxoJeBsECEIYN2HpS89GuZ-yA2Y"
+```
+
+Components:
+1. Owner: `basis-ai.com`
+1. Type: `TXT`
+1. Class: `IN` (Internet)
+1. TTL: 3398
+1. rdata - the data
+
+---
+### RRSet
+
+- A set of Resource Records
+
+```
+$ dig TXT basis-ai.com
+
+;; QUESTION SECTION:
+;basis-ai.com.                  IN      TXT
+
+;; ANSWER SECTION:
+basis-ai.com.           3600    IN      TXT     "v=spf1 include:_spf.google.com include:sendgrid.net include:4788637.spf03.hubspotemail.net ~all"
+basis-ai.com.           3600    IN      TXT     "google-site-verification=80hiIqAESYhPJXpCUhzij24RjxOVWjRoWNguO6UTWA8"
+basis-ai.com.           3600    IN      TXT     "google-site-verification=lTJdfZNdjSedLBKIOxoJeBsECEIYN2HpS89GuZ-yA2Y"
+```
+
+### RRSig
+
+- One Signature for the RRSet
+- Recursively validated to root
+
+```
+$ dig +dnssec TXT basis-ai.com
+
+;; QUESTION SECTION:
+;basis-ai.com.                  IN      TXT
+
+;; ANSWER SECTION:
+basis-ai.com.           3009    IN      TXT     "v=spf1 include:_spf.google.com include:sendgrid.net include:4788637.spf03.hubspotemail.net ~all"
+basis-ai.com.           3009    IN      TXT     "google-site-verification=80hiIqAESYhPJXpCUhzij24RjxOVWjRoWNguO6UTWA8"
+basis-ai.com.           3009    IN      TXT     "google-site-verification=lTJdfZNdjSedLBKIOxoJeBsECEIYN2HpS89GuZ-yA2Y"
+basis-ai.com.           3009    IN      RRSIG   TXT 13 2 3600 20200704054318 20200612054318 29388 basis-ai.com. uSSmYuWSH+5wWhWUk2LY1oik
++nxwIXSfy5f97fjKLTM7AHV28Vud8G6V MMfm1azcGTi682Xs03fRiQZjOKiqfQ==
+```
+
+---
+![bg 30%](assets/images/dnssec-basis-ai-com.png)
+
+[Source](https://dnsviz.net/d/basis-ai.com/dnssec/)
+
+
+---
+### DNSKEY
+
+```
+$ dig +dnssec DNSKEY basis-ai.com
+
+; <<>> DiG 9.11.3-1ubuntu1.12-Ubuntu <<>> +dnssec DNSKEY basis-ai.com
+;; global options: +cmd
+;; Got answer:
+;; ->>HEADER<<- opcode: QUERY, status: NOERROR, id: 24699
+;; flags: qr rd ra; QUERY: 1, ANSWER: 3, AUTHORITY: 0, ADDITIONAL: 1
+
+;; OPT PSEUDOSECTION:
+; EDNS: version: 0, flags: do; udp: 512
+;; QUESTION SECTION:
+;basis-ai.com.                  IN      DNSKEY
+
+;; ANSWER SECTION:
+basis-ai.com.           222     IN      DNSKEY  257 3 13 sK8vHLxnYzqu9ox+LLwHSlUeZe/TZi0xMIMEUtIvbJtBXqEcSlNKAaKx nQv6RCYGN3oI/
+FSS4EXyHinfutfoYw==
+basis-ai.com.           222     IN      DNSKEY  256 3 13 yYSfQi6LaGU70sbBgh3Oacl0dVSXhvCbMbgrKDot6pc3u0w62SvO456d WJ5Yy1Nme+iTWH0yj3SO/
+IGA89TjrQ==
+basis-ai.com.           222     IN      RRSIG   DNSKEY 13 2 300 20200704054318 20200612054318 44445 basis-ai.com. 5Fw5yqwW7IszfoaO
++qxX96x4bQAo2rhpGxP7b1ua8aL9gIP6000F79BM LrhzS5VbQ8ixAeAKy/fjS1IOvy36iA==
+```
+
+- Flags: Zone Signing Key (257) vs Key Signing Key (256)
+- Protocol: Fixed to 3
+- Algorithm: See [list](https://en.wikipedia.org/wiki/Domain_Name_System_Security_Extensions#Algorithms)
+- Public Key Material
+
+---
+### Zone Signing Key (ZSK)
+
+- Can be rotated by the domain owner easily
+- ZSK used to sign all non DNSKEY RRSets
+- The appropriate DNSKEY RR is used to validate the RRSIGs
+
+```
+basis-ai.com.           222     IN      DNSKEY  256 3 13 yYSfQi6LaGU70sbBgh3Oacl0dVSXhvCbMbgrKDot6pc3u0w62SvO456d WJ5Yy1Nme+iTWH0yj3SO/
+IGA89TjrQ==
+```
+
+![](https://www.cloudflare.com/img/products/ssl/diagram-zone-signing-keys-1.svg)
+
+---
+![bg 80%](https://www.cloudflare.com/img/products/ssl/diagram-zone-signing-keys-2.svg)
+
+---
+### Key Signing Key (KSK)
+
+- Used to sign DNSKEY RRSets
+- The appropriate DNSKEY RR is used to validate the RRSIG of the DNSKEY
+- Harder to rotate
+
+```
+basis-ai.com.           222     IN      DNSKEY  257 3 13 sK8vHLxnYzqu9ox+LLwHSlUeZe/TZi0xMIMEUtIvbJtBXqEcSlNKAaKx nQv6RCYGN3oI/
+FSS4EXyHinfutfoYw==
+```
+
+![](https://www.cloudflare.com/img/products/ssl/diagram-key-signing-keys-1.svg)
+
+---
+![bg 60%](https://www.cloudflare.com/img/products/ssl/diagram-key-signing-keys-2.svg)
+
+---
+### DS Record
+
+- The KSK is embedded in a DS record that is submitted "upwards" (i.e. to `com.`)
+
+```
+$ dig +dnssec DS basis-ai.com
+
+; <<>> DiG 9.11.3-1ubuntu1.12-Ubuntu <<>> +dnssec DS basis-ai.com
+;; global options: +cmd
+;; Got answer:
+;; ->>HEADER<<- opcode: QUERY, status: NOERROR, id: 19654
+;; flags: qr rd ra; QUERY: 1, ANSWER: 2, AUTHORITY: 0, ADDITIONAL: 1
+
+;; OPT PSEUDOSECTION:
+; EDNS: version: 0, flags: do; udp: 512
+;; QUESTION SECTION:
+;basis-ai.com.                  IN      DS
+
+;; ANSWER SECTION:
+basis-ai.com.           86400   IN      DS      44445 13 2 9B05C6EA7028958C69F8E47410E7BD3E782C60B41519192CF75D0648 E0200191
+basis-ai.com.           86400   IN      RRSIG   DS 8 2 86400 20200621055752 20200614044752 39844 com.
+FXLj45HvljmJI6aKW3M9V6vcX4G8iYEtA2yHkmAeZKB7AhMECdfOOzT0 bQ7oDgA8qgowmhxSfM9rEz9gZM3VP/I38HscP5mVB5n6pmVx3TdJx8cX ptQvGl3Px6d/
+whdAoH7hmUk8gnNPl8xfRZfcNGjqxw/g7Gi55KqF9kJB Xuon21Bjg8H7uF6EwprAh9K5ybn0DL9HbkEbSxYNNBf7NA==
+```
+
+- Key tag of DNSSKEY: some numeric identifier
+- Algorithm
+- Digest Algorithm
+- Digest of DNSSKEY RR containing the KSK
+
+---
+![bg 50%](https://www.cloudflare.com/img/products/ssl/diagram-delegation-signer-records.svg)
+
+---
+### DS Record of `.com`
+
+```
+$ dig +dnssec DS com
+
+;; QUESTION SECTION:
+;com.                           IN      DS
+
+;; ANSWER SECTION:
+com.                    33224   IN      DS      30909 8 2 E2D3C916F6DEEAC73294E8268FB5885044A833FC5459588F4A9184CF C41A5766
+com.                    33224   IN      RRSIG   DS 8 1 86400 20200628170000 20200615160000 48903 . GZ8NQtY
++xGXh1NnD1GOeeC6KDbETHDtlStzJSEmaFXplSb8KWzfg5SIN ilLGGEXFBtkktbf5v3KH6bhkt3r7LS90E5nzinZcUWHETxkBG+fdGj+z
++aU4AW5pjYxhnVGaeBEMS6yJN3gfdfgJguH5ajAC9lZs83Ed7dhzvONy a7tx4U2kC5zpY95HrvJZmtKxaEsPfy7Z2BSqrLGPMVlsQsY7UdGdM5Ox
+Ey4U4q2KRIQMwwXxxR4AnwdBF7jfewM7AEQ/oNiLMisFj6gqxadGwT7t 0blsyjQ2wbzZmL55Ck33uZwHZXN8T2bA98eDUR8x+rCBpyo28qTBiOiG 3nmeBQ==
+```
+
+---
+![bg 27%](https://www.cloudflare.com/img/products/ssl/diagram-the-chain-of-trust.svg)
+
+---
+### Root Key
+
+Immensely powerful key at the root of the internet...
+
+```
+$ dig DNSKEY .
+
+;; QUESTION SECTION:
+;.                              IN      DNSKEY
+
+;; ANSWER SECTION:
+.                       120698  IN      DNSKEY  256 3 8 AwEAAc4qsciJ5MdMUIu4n/pSTsSiU9OCyAanPTe5TcMX4v1hxhpFwiTG
+QUv3BXT6IAO4litrZKTUaj4vitqHW1+RQsHn3k/gSvt7FwyQwpy0mEnS hBgr6RQiGtlBODNY67sTl+W8M/b6SLTAaaDri3BO5u6wrDs149rMELJA doVBjmXW
++zRH3kZzh3lwyTZsYtk7L+3DYbTiiHq+sRB4F9XoBPAz5Psv 4q4EiPq07nW3acbW84zTz3CyQUmQkJT9VB1oUKHz6sNoyccqzcMX4q1G
+HAYpQ7FAXlKMxidoN1Ay5DWANgTmgJXzKhcI2nIZoq1x3yq4814O1LQd 9QP68gI37+0=
+.                       120698  IN      DNSKEY  257 3 8 AwEAAaz/tAm8yTn4Mfeh5eyI96WSVexTBAvkMgJzkKTOiW1vkIbzxeF3 +/
+4RgWOq7HrxRixHlFlExOLAJr5emLvN7SWXgnLh4+B5xQlNVz8Og8kv ArMtNROxVQuCaSnIDdD5LKyWbRd2n9WGe2R8PzgCmr3EgVLrjyBxWezF 0jLHwVN8efS3rCj/
+EWgvIWgb9tarpVUDK/b58Da+sqqls3eNbuv7pr+e oZG+SrDK6nWeL3c6H5Apxz7LjVc1uTIdsIXxuOLYA4/ilBmSVIzuDWfd RUfhHdY6+cn8HFRm
++2hM8AnXGXws9555KrUB5qihylGa8subX2Nn6UwN R1AkUTV74bU=
+```
+
+---
+### [Root Signing Ceremony](https://www.cloudflare.com/dns/dnssec/root-signing-ceremony/)
+
+- Securely stored in two locations
+- Multiple participants perform only parts of the ceremony
+- Participants of various affliations
+- Audited by two Big Four
+- Keys are stored in safes requiring multiple (physical) keys
+- Very complicated process!
+
+---
+### [Hardware Failure](https://blog.apnic.net/2020/03/04/drilling-for-the-ksk/)
+
+![bg](https://blog.apnic.net/wp-content/uploads/2020/02/Screenshot-2020-02-27-at-16.11.50-15-1.png)
+
+---
+### No Record and Enumeration
+
+- How to verify the absence of a record?
+- "Next Secure Record": `NSEC` or `NSEC3`
+- But now an attacker can enumerate the records...
+- Read more [here](https://www.cloudflare.com/dns/dnssec/dnssec-complexities-and-considerations/)
+
+---
+## Encrypted DNS
+
+### DNS over HTTPS (DOH)
+
+- Wrap DNS in HTTPS over port 443
+- Looks just like HTTPS traffic (pros and cons)
+- Better privacy since they cannot be differentiated
+
+### DNS over TLS (DOT)
+
+- Wrap DNS UDP Datagrams in TLS over port 853
+- Distinct traffic (pros and cons)
+- Better control by network administrators (filtering malicious traffic for e.g.)
 
 ---
 ## Types of DNS
