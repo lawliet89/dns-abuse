@@ -317,6 +317,13 @@ basis-ai.com.           3600    IN      TXT     "v=spf1 include:_spf.google.com 
 ```
 
 ---
+## `TXT` (Ab)use - Identity and Ownership Verification
+
+- Used extensively over the internet to verify ownership of domain
+- Used by Certificate Authorities to verify ownership and control of domain before issuing certificates (e.g. ACME protocol used by Let's Encrypt)
+- Works by placing certain values in `TXT` records, manually or programmatically
+
+---
 ## `TXT` (Ab)use - DMARC
 
 - System of using DNS Records to validate who is allowed to send email as the domain
@@ -692,11 +699,6 @@ EWgvIWgb9tarpVUDK/b58Da+sqqls3eNbuv7pr+e oZG+SrDK6nWeL3c6H5Apxz7LjVc1uTIdsIXxuOL
 - Wrap DNS UDP Datagrams in TLS over port 853
 - Distinct traffic (pros and cons)
 - Better control by network administrators (filtering malicious traffic for e.g.)
-
----
-## Types of DNS
-
--- internationalization punycopde
 
 ---
 ## Conclusion
